@@ -28,7 +28,7 @@ class Player:
                 self.catcher.image = load_image('catcher_left.png')
                 self.current_direction = 'left'
         if keys[pygame.K_LSHIFT]:
-            self.speed = 2.3
+            self.speed = 2.5
         else:
             self.speed = 1
         if keys[pygame.K_ESCAPE]:

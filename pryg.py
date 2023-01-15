@@ -1,29 +1,37 @@
 import random
 import pygame
+import win32con
 from win32api import GetSystemMetrics
+import win32api
 import librosa
 from record_database import *
 from design import load_image
 from moving_catcher import Player
 import os
-import pygame_widgets
-from pygame_widgets.slider import Slider
 import sys
 from tkinter import *
 from tkinter import ttk
 import consts
 import pygame.gfxdraw
-from pygame.math import Vector2
-from PIL import Image
-
+from numba import jit
+import ctypes
+import threading
 
 pygame.init()
 screen = pygame.display.set_mode((GetSystemMetrics(0), GetSystemMetrics(1)))
 
 from fruti import Fruits
 
+runnp = True
 if __name__ == '__main__':
-    print(pygame.font.get_fonts())
+
+    def pointInRectanlge(px, py, rw, rh, rx, ry):
+        if px > rx and px < rx + rw:
+            if py > ry and py < ry + rh:
+                return True
+        return False
+
+
     class Button:
         def __init__(self, text, translation, width, height, pos, elevation, buttons):
             self.pressed = False
@@ -37,13 +45,14 @@ if __name__ == '__main__':
             self.bottom_color = '#354B5E'
             self.gui_font = pygame.font.Font(None, 30)
             self.text = text
-            self.text_surf = self.gui_font.render(text, True, '#FFFFFF')
+            self.text_surf = self.gui_font.render(self.text, True, '#FFFFFF')
             self.text_rect = self.text_surf.get_rect(center=self.top_rect.center)
             buttons.append(self)
 
         def change_text(self, newtext):
             self.text_surf = self.gui_font.render(newtext, True, '#FFFFFF')
             self.text_rect = self.text_surf.get_rect(center=self.top_rect.center)
+            self.text = newtext
 
         def draw(self, screen):
             # elevation logic
@@ -64,13 +73,11 @@ if __name__ == '__main__':
                 if pygame.mouse.get_pressed()[0]:
                     self.dynamic_elecation = 0
                     self.pressed = True
-                    self.change_text(f"{self.translation}")
                 else:
                     self.dynamic_elecation = self.elevation
                     if self.pressed == True:
                         print('click')
                         self.pressed = False
-                        self.change_text(self.text)
                         return True
             else:
                 self.dynamic_elecation = self.elevation
@@ -80,12 +87,112 @@ if __name__ == '__main__':
             return self.text
 
 
+    class Slider:
+        def __init__(self, position: tuple, upperValue: int = 10, sliderWidth: int = 30,
+                     text: str = "Text slider",
+                     outlineSize: tuple = (300, 100)) -> None:
+            self.position = position
+            self.outlineSize = outlineSize
+            self.text = text
+            self.sliderWidth = sliderWidth
+            self.upperValue = upperValue
+
+        def getValue(self) -> float:
+            return self.sliderWidth / (self.outlineSize[0] / self.upperValue)
+
+        def render(self, on, display: pygame.display) -> None:
+            if on:
+                pygame.draw.rect(display, (0, 0, 0), (self.position[0], self.position[1],
+                                                      self.outlineSize[0], self.outlineSize[1]), 3)
+
+                pygame.draw.rect(display, (0, 0, 0), (self.position[0], self.position[1],
+                                                      self.sliderWidth, self.outlineSize[1] - 10))
+
+                self.font = pygame.font.Font(pygame.font.get_default_font(), int((15 / 100) * self.outlineSize[1]))
+
+                valueSurf = self.font.render(f"{self.text}: {round(self.getValue())}", True, (255, 0, 0))
+
+                textx = self.position[0] + (self.outlineSize[0] / 2) - (valueSurf.get_rect().width / 2)
+                texty = self.position[1] + (self.outlineSize[1] / 2) - (valueSurf.get_rect().height / 2)
+
+                display.blit(valueSurf, (textx, texty))
+
+        def changeValue(self) -> None:
+            mousePos = pygame.mouse.get_pos()
+            if pointInRectanlge(mousePos[0], mousePos[1]
+                    , self.outlineSize[0], self.outlineSize[1], self.position[0], self.position[1]):
+                if pygame.mouse.get_pressed()[0]:
+                    self.sliderWidth = mousePos[0] - self.position[0]
+
+                    if self.sliderWidth < 1:
+                        self.sliderWidth = 0
+                    if self.sliderWidth > self.outlineSize[0]:
+                        self.sliderWidth = self.outlineSize[0]
+
+
+    class Checkbox:
+        def __init__(self, screen, pos, value):
+            self.image = load_image('gal.png')
+            self.x, self.y = pos[0], pos[1]
+            self.size = 100, 85
+            self.current_value = value
+            self.screen = screen
+            self.rect_but = pygame.Rect((self.x, self.y), self.size)
+
+        def render(self, on=True):
+            if on:
+                pygame.draw.rect(self.screen, (0, 0, 0), self.rect_but, width=5, border_radius=15)
+                if self.current_value:
+                    screen.blit(self.image, (self.x, self.y + 6))
+
+        def change_value(self):
+            mouse_pos = pygame.mouse.get_pos()
+            mouse_click = pygame.mouse.get_pressed()
+            if self.rect_but.collidepoint(mouse_pos):
+                if mouse_click[0]:
+                    self.current_value = not self.current_value
+
+        def get_value(self):
+            return self.current_value
+
+
+    class RadioButton:
+        def __init__(self, screen, pos, value, radiobuttonsGroup):
+            self.image = load_image('gal.png')
+            self.x, self.y = pos[0], pos[1]
+            self.size = 100, 85
+            self.current_value = value
+            self.screen = screen
+            self.rect_but = pygame.Rect((self.x, self.y), self.size)
+            self.l = radiobuttonsGroup
+            radiobuttonsGroup.append(self)
+
+        def render(self, on=True):
+            if on:
+                pygame.draw.rect(self.screen, (0, 0, 0), self.rect_but, width=5, border_radius=15)
+                if self.current_value:
+                    screen.blit(self.image, (self.x, self.y + 6))
+
+        def change_value(self, second_radio_button):
+            mouse_pos = pygame.mouse.get_pos()
+            mouse_click = pygame.mouse.get_pressed()
+            if self.rect_but.collidepoint(mouse_pos):
+                if mouse_click[0]:
+                    self.current_value = not self.current_value
+                    second_radio_button.current_value = not second_radio_button.current_value
+
+        def get_value(self):
+            return self.current_value
+
+
+    @jit()
     def notes_seconds(audio):
         y, sr = librosa.load(audio)
         notes = librosa.onset.onset_detect(y=y, sr=sr, units='time')
         return notes
 
 
+    @jit()
     def detect_silent(audio):
         y, sr = librosa.load(audio)
         yt, index = librosa.effects.trim(y)
@@ -110,17 +217,16 @@ if __name__ == '__main__':
 
 
     def score_render(score):
-        button_font = pygame.font.SysFont('Arial', 60)
+        button_font = pygame.font.SysFont('resourses/koblenz-serial-extralight-regular.ttf', 50)
         render = button_font.render(str(score), 0, (0, 250, 0))
         screen.blit(render, (GetSystemMetrics(0) - 200, GetSystemMetrics(1) - 100))
 
 
     def combo_render(combo, player_pos, screen):
-        """font_for_combo = pygame.font.SysFont('Koblenz-Serial-ExtraLight', 45)"""
-        font_for_combo = pygame.font.SysFont('papyrus', 45)
+        font_for_combo = pygame.font.SysFont('resourses/koblenz-serial-extralight-regular.ttf', 45)
         combo_rend = font_for_combo.render(str(combo), 0, (255, 255, 255))
-        our_pos = player_pos[0] + 75, player_pos[1] + 183
-        screen.blit(combo_rend, our_pos)
+        our_pos = (player_pos[0] + 75, player_pos[1] + 183)
+        screen.blit(combo_rend, (500, 500))
 
 
     def pause_render(screen, background):
@@ -133,11 +239,9 @@ if __name__ == '__main__':
         rectang_retry.center = GetSystemMetrics(0) / 2, GetSystemMetrics(1) / 2
         rectang_back = pygame.Rect(0, 0, 60, 60)
         rectang_back.center = GetSystemMetrics(0) / 2, GetSystemMetrics(1) / 2 + 200
-        contin_rect = contin.get_rect()
-        retry_rect = retry.get_rect()
-        back_rect = back.get_rect()
         sounds = (pygame.mixer.Sound('resourses/music/pause-continue-click.mp3'), pygame.mixer.Sound('resourses/music'
-                                                                                                     '/pause-retry-click.mp3'),
+                                                                                                     '/pause-retry'
+                                                                                                     '-click.mp3'),
                   pygame.mixer.Sound('resourses/music/pause-back-click.mp3'))
         mouse_pos = pygame.mouse.get_pos()
         mouse_click = pygame.mouse.get_pressed()
@@ -174,11 +278,33 @@ if __name__ == '__main__':
             os.makedirs(newpath)
 
 
+    def create_f():
+        newpath = r'C:\pryg\.beatmaps'
+        if not os.path.exists(newpath):
+            os.makedirs(newpath)
+            FILE_ATTRIBUTE_HIDDEN = 0x02
+            ret = ctypes.windll.kernel32.SetFileAttributesW(newpath, FILE_ATTRIBUTE_HIDDEN)
+
+
+    def create_settings_file():
+        open(r'C:\pryg\settings.txt', 'a').close()
+        newpath = 'pryg/settings.txt'
+        if not os.path.exists(newpath):
+            win32api.SetFileAttributes(r'C:\pryg\settings.txt', win32con.FILE_ATTRIBUTE_HIDDEN)
+
+
+    def set_offset(value):
+        consts.note_offset = value
+
+
     def menu(screen):
         create_folder()
+        create_f()
+        create_settings_file()
         global maps
         maps = CreateMpDb()
         global all_sprites
+        list_of_names = maps.all_maps()
         all_sprites = pygame.sprite.Group()
         global sprite_of_arrow
         sprite_of_arrow = pygame.sprite.Sprite()
@@ -193,8 +319,6 @@ if __name__ == '__main__':
         for i in range(100):
             snow_list.append([random.randrange(0, GetSystemMetrics(0)), random.randrange(0, GetSystemMetrics(1)),
                               random.randrange(1, 5)])
-        slider = Slider(screen, 100, 100, 800, 40, min=0, max=255, step=1)
-        slider.hide()
         play_sound()
         menu_trigger = True
         menu_picture = pygame.image.load('resourses/lol2.jpg').convert_alpha()
@@ -262,7 +386,7 @@ if __name__ == '__main__':
                         quit()
                         sys.exit()
             if options.check_click():
-                pass
+                options_window(screen, menu_picture)
             pygame.display.flip()
             clock.tick(20)
 
@@ -280,12 +404,17 @@ if __name__ == '__main__':
         add_song_image = pygame.image.load('resourses/plus.png').convert_alpha()
         buttons = []
         songs = []
-        back = Button("Exit", "Exit?", 400, 150, (200, GetSystemMetrics(1) - 200), 5, buttons)
+        list_of_names = maps.all_maps()
+        print(list_of_names)
+        back = Button("Exit", "Exit?", 400, 150, (0, GetSystemMetrics(1) - 200), 5, buttons)
         rectang = pygame.Rect(0, 0, 60, 60)
         rectang.center = GetSystemMetrics(0) - 60, 60
         song = Button('nostalgic', 'nostalgic', 400, 150, (GetSystemMetrics(0) - 500, 150), 5, songs)
         song1 = Button('tomydream', 'tomydream', 400, 150, (GetSystemMetrics(0) - 500, 350), 5, songs)
         song2 = Button('rickroll', 'rickroll', 400, 150, (GetSystemMetrics(0) - 500, 550), 5, songs)
+        song3 = Button('Hajimari_no_Toki', 'Hajimari_no_Toki', 400, 150, (GetSystemMetrics(0) - 500, 750), 5, songs)
+        up = Button('up', 'up', 50, 50, (GetSystemMetrics(0) - 250, 50), 5, buttons)
+        down = Button('down', 'down', 50, 50, (GetSystemMetrics(0) - 250, GetSystemMetrics(1) - 50), 5, buttons)
         while main_window_trigger:
             events = pygame.event.get()
             for event in events:
@@ -306,42 +435,83 @@ if __name__ == '__main__':
                 play_sound(music='back')
                 main_window_trigger = False
                 return menu(screen)
+            if up.check_click():
+                if len(list_of_names) > 4:
+                    if consts.current_index != -(len(list_of_names) + 1):
+                        songs[0].change_text(list_of_names[consts.current_index][0])
+                        songs[1].change_text(list_of_names[(consts.current_index + 1) % len(list_of_names)][0])
+                        songs[2].change_text(list_of_names[(consts.current_index + 2) % len(list_of_names)][0])
+                        songs[3].change_text(list_of_names[(consts.current_index + 3) % len(list_of_names)][0])
+                        consts.current_index -= 1
+                    else:
+                        consts.current_index = 0
+            if down.check_click():
+                if len(list_of_names) > 4:
+                    if consts.current_index != len(list_of_names):
+                        songs[0].change_text(list_of_names[consts.current_index][0])
+                        songs[1].change_text(list_of_names[(consts.current_index + 1) % len(list_of_names)][0])
+                        songs[2].change_text(list_of_names[(consts.current_index + 2) % len(list_of_names)][0])
+                        songs[3].change_text(list_of_names[(consts.current_index + 3) % len(list_of_names)][0])
+                        consts.current_index += 1
+                    else:
+                        consts.current_index = 0
             for song in songs:
                 if song.check_click():
                     play_sound(music='start')
                     main_window_trigger = False
-                    print(maps.open_a_song(song.get_name()))
-                    return maps.open_a_song(song.get_name())
+                    a = maps.open_a_song(song.get_name())
+                    print(a, maps.get_song_name(a[0][0]))
+                    return a, maps.get_song_name(a[0][0])
             if rectang.collidepoint(mouse_pos):
                 if mouse_click[0]:
                     download_window()
             pygame.display.flip()
 
 
-    def options_window(screen, fon, slider):
+    def options_window(screen, fon):
         options_trigger = True
-        button_font = pygame.font.SysFont('Arial', 72)
-        back = button_font.render('Back', 1, pygame.Color('green'))
-        button_back = pygame.Rect(0, 0, 400, 150)
-        button_back.center = 200, GetSystemMetrics(1) - 75
-        direct = 0
-        alpha = 255
-        slider.show()
+        font = pygame.font.Font('resourses/210 Gulim 070.ttf', 40)
+        sprite_of_arrow = pygame.sprite.Sprite()
+        sprite_of_arrow.image = load_image("gachi_arrow.png")
+        sprite_of_arrow.rect = sprite_of_arrow.image.get_rect()
+        all_sprites1 = pygame.sprite.Group()
+        all_sprites1.add(sprite_of_arrow)
+        buttons = []
+        plus = Checkbox(screen, (100, 100), True)
+        back = Button("Exit", "Exit?", 400, 150, (0, GetSystemMetrics(1) - 200), 5, buttons)
+        slider_for_offset = Slider((250, 100), 300, text='note_offset', sliderWidth=0)
+        slider_for_back = Slider((100, 300), 255, text='background', sliderWidth=0)
+        check_for_snow = Checkbox(screen, (100, 500), True)
+        check_for_fps = Checkbox(screen, (100, 700), True)
         while options_trigger:
+            pygame.event.get()
             screen.blit(fon, (0, 0))
-            pygame.draw.rect(screen, 'black', button_back, border_radius=25, width=10)
-            screen.blit(back, (button_back.centerx - 130, button_back.centery - 70))
-            mouse_pos = pygame.mouse.get_pos()
-            mouse_click = pygame.mouse.get_pressed()
-            if button_back.collidepoint(mouse_pos):
-                pygame.draw.rect(screen, 'black', button_back, border_radius=25)
-                screen.blit(back, (button_back.centerx - 130, button_back.centery - 70))
-                if mouse_click[0]:
-                    options_trigger = False
-                    menu(screen)
-                    slider.hide()
-            events = pygame.event.get()
-            pygame_widgets.update(events)
+            cursor(sprite_of_arrow)
+            for i in buttons:
+                i.draw(screen)
+            plus.render()
+            screen.blit(font.render("Setting up an offset", 1, (255, 255, 255)), (600, 150))
+            screen.blit(font.render("Setting up a backgroung", 1, (255, 255, 255)), (450, 350))
+            screen.blit(font.render("Fps render", 1, (255, 255, 255)), (350, 500))
+            screen.blit(font.render("Snow render", 1, (255, 255, 255)), (250, 700))
+            slider_for_offset.render(True, screen)
+            slider_for_back.render(True, screen)
+            check_for_snow.render()
+            check_for_fps.render()
+            if back.check_click():
+                check_for_snow.render(on=False)
+                check_for_fps.render(on=False)
+                slider_for_offset.render(False, screen)
+                slider_for_back.render(False, screen)
+                options_trigger = False
+                return menu(screen)
+            check_for_snow.change_value()
+            check_for_fps.change_value()
+            slider_for_offset.changeValue()
+            slider_for_back.changeValue()
+            plus.change_value()
+            all_sprites1.draw(screen)
+            all_sprites1.update()
             pygame.display.flip()
 
 
@@ -357,7 +527,6 @@ if __name__ == '__main__':
         if music == 'MariannE.wav':
             pygame.mixer.music.load('MariannE.wav')
             pygame.mixer.music.play()
-            pygame.mixer.music.set_volume(0)
             if pause:
                 pygame.mixer.pause()
             elif not pause:
@@ -377,7 +546,6 @@ if __name__ == '__main__':
         else:
             pygame.mixer.music.load('resourses/music/fon.mp3')
             pygame.mixer.music.play(10)
-            pygame.mixer.music.set_volume(0)
         if stop:
             pygame.mixer.music.unload()
 
@@ -474,12 +642,18 @@ if __name__ == '__main__':
 
 
     def create_beatmap(name, audio):
-        with open(f'beat_map_{name}.txt', 'w'):
-            pass
+        with open(f'C:/pryg/.beatmaps/beat_map_{name}.txt', 'w') as f:
+            n = notes_seconds(audio)
+            lit = [list(n)[x] for x in range(0, len(list(n)))]
+            lit = list(map(str, lit))
+            n2 = ' '.join(lit)
+            f.write(n2)
 
 
     def open_beatmap(name):
-        pass
+        with open(f'C:/pryg/.beatmaps/beat_map_{name}.txt', 'r') as f:
+            nots = list(map(float, f.readline().split(' ')))
+            return nots
 
 
     def download_window():
@@ -532,37 +706,60 @@ if __name__ == '__main__':
             clock.tick(60)
 
 
-    def split_animated_gif(gif_file_path):
-        ret = []
-        gif = Image.open(gif_file_path)
-        for frame_index in range(gif.n_frames):
-            gif.seek(frame_index)
-            frame_rgba = gif.convert("RGBA")
-            pygame_image = pygame.image.fromstring(
-                frame_rgba.tobytes(), frame_rgba.size, frame_rgba.mode
-            )
-            ret.append(pygame_image)
-        return ret
+    def show_gif(screen):
+        endless = pygame.mixer.Sound('resourses/music/бесконечность не предел.mp3')
+        clock = pygame.time.Clock()
+        loadning_mess = [pygame.font.Font('resourses/210 Gulim 070.ttf', 40).render('Loading', 1, (255, 255, 255)),
+                         pygame.font.Font('resourses/210 Gulim 070.ttf', 40).render('Loading.', 1, (255, 255, 255)),
+                         pygame.font.Font('resourses/210 Gulim 070.ttf', 40).render('Loading..', 1, (255, 255, 255)),
+                         pygame.font.Font('resourses/210 Gulim 070.ttf', 40).render('Loading...', 1, (255, 255, 255))]
+        currentFrame = 0
+        endless.play()
+        while runnp:
+            clock.tick(3)
+            pygame.event.get()
+            screen.fill(0)
+            screen.blit(loadning_mess[currentFrame], (1920 / 2, 1080 / 2))
+            currentFrame = (currentFrame + 1) % len(loadning_mess)
+            pygame.display.flip()
+        endless.stop()
 
 
     clicked = False
+    count = 0
 
 
     def gameloop(clicked, open_menu=True):
         clicked1 = clicked
+        global runnp
+        runnp = True
         if open_menu:
             if clicked1:
-                audio = main_window(screen)[0][0]
+                all = main_window(screen)
+                audio = all[0][0][0]
+                name = all[1][0][0]
+                print(audio)
+                print(name)
+                consts.current_name = name
                 consts.current_audio = audio
             else:
-                audio = menu(screen)[0][0]
+                all = menu(screen)
+                audio = all[0][0][0]
+                name = all[1][0][0]
+                print(audio)
+                print(name)
+                consts.current_name = name
                 consts.current_audio = audio
             clicked1 = True
+        thread_for_loading = threading.Thread(target=show_gif, args=(screen,))
+        thread_for_loading.start()
         score = 0
         combo = 1
+        frs = []
         fruits_on_korzina = 0
         all_fruits = 0
         background = pygame.image.load('resourses/новый god.jpg').convert_alpha()
+        sprites_with_trails = pygame.sprite.Group()
         fps = 60
         paused = False
         clock = pygame.time.Clock()
@@ -573,20 +770,25 @@ if __name__ == '__main__':
         catcher.rect.x = 660
         catcher.rect.y = 921
         all_sprites.add(catcher)
+        sprites_with_trails.add(catcher)
         player = Player(catcher)
         sprite_of_arrow = pygame.sprite.Sprite()
         sprite_of_arrow.image = load_image("gachi_arrow.png")
         sprite_of_arrow.rect = sprite_of_arrow.image.get_rect()
         all_sprites.add(sprite_of_arrow)
         pygame.mouse.set_visible(False)
-        notes = notes_seconds(consts.current_audio)
-        copied_notes = [list(notes)[x] for x in range(0, len(list(notes)), 2)]
+        copied_notes = open_beatmap(consts.current_name)
+        print(len(copied_notes))
+        if len(copied_notes) > 800:
+            copied = copied_notes
+            copied_notes = [copied[x] for x in range(0, len(copied), 2)]
+        runnp = False
+        screen.blit(background, (0, 0))
         fun3_2_1(background)
+        print(consts.current_audio)
         pygame.mixer.music.load(consts.current_audio)
         pygame.mixer.music.play()
         pygame.mixer.music.set_volume(0.1)
-        # delt = 0.0027 средний режим
-        # delt = 0.07 для легкого режима
         delt = 0.07
         print(len(copied_notes))
         start_ticks = 0
@@ -611,7 +813,6 @@ if __name__ == '__main__':
                 pygame.mixer.music.pause()
                 pau = pause_render(screen, background)
                 if pau == 'con':
-                    pygame.mouse.set_visible(False)
                     paused = False
                     fun3_2_1(background)
                     pygame.mixer.music.unpause()
@@ -641,8 +842,13 @@ if __name__ == '__main__':
                     busted = False
                     if copied_notes[i + 1] - copied_notes[i] < consts.lol:
                         busted = True
-                    if abs(current_position() - copied_notes[i]) < delt:
-                        Fruits(player, catcher, busted, all_sprites)
+                    if abs(current_position() + consts.note_offset - copied_notes[i]) < delt:
+                        frs.append(Fruits(player, catcher, 'flashlight', busted, all_sprites))
+                        if len(frs) == 2:
+                            if abs(frs[0].get_x() - frs[1].get_x()) > 300 or abs(frs[0].get_y() - frs[1].get_y()) < 80:
+                                frs[0].forsag = True
+                                print(frs)
+                                frs = []
                         deleted_notes.append(copied_notes[i])
                         all_fruits += 1
                         print(current_position())
@@ -661,7 +867,7 @@ if __name__ == '__main__':
                             i.kill()
                 all_sprites.draw(screen)
                 all_sprites.update()
-                pygame.display.update()
+                pygame.display.flip()
                 clock.tick(fps)
         print(all_fruits)
         return gameloop(clicked1)
