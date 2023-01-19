@@ -1,12 +1,11 @@
 import sqlite3
-import os
 
 
 class CreateMpDb:
     def __init__(self):
         self.database = sqlite3.connect(r'C:\pryg\users_songs.db')
         self.database.execute("""create table if not exists tablo (id INTEGER PRIMARY KEY, map_name TEXT NOT NULL, 
-        song TEXT UNIQUE);""")
+        song TEXT UNIQUE, UNIQUE ("map_name") ON CONFLICT IGNORE);""")
         self.list_of_names = [self.all_maps()]
 
     def add_to_database(self, map_name, song):
@@ -18,6 +17,12 @@ class CreateMpDb:
         con = self.database
         cursor = con.cursor()
         cursor.execute("SELECT map_name FROM tablo;")
+        return cursor.fetchall()
+
+    def all_songs(self):
+        con = self.database
+        cursor = con.cursor()
+        cursor.execute("SELECT song FROM tablo;")
         return cursor.fetchall()
 
     def open_a_song(self, name):
@@ -36,7 +41,7 @@ class AchivementDb:
     def __init__(self):
         self.database = sqlite3.connect(r'C:\pryg\users_achivements.db')
         self.database.execute("""create table if not exists tablo (id INTEGER PRIMARY KEY, achiv_name TEXT UNIQUE, 
-                yes_or_not TEXT NOT NULL);""")
+                yes_or_not BOOL NOT NULL);""")
         self.list_of_achiv = ("Catch -1 fruit", "Catch 100000", "Catch 2000000", "Catch 100000 in inverted",
                               "Catch 2000000 in inverted", "Catch 100000 in flashlight",
                               "Catch 2000000 in flashlight")

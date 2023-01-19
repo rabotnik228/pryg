@@ -1,5 +1,4 @@
 import pygame
-from win32api import GetSystemMetrics
 from design import load_image
 
 
@@ -18,7 +17,7 @@ class Player:
         if keys[pygame.K_ESCAPE]:
             quit()
         if keys[pygame.K_RIGHT]:
-            if self.catcher.rect.x <= GetSystemMetrics(0) - 200:
+            if self.catcher.rect.x <= 1920 - 200:
                 self.catcher.rect.x += count * self.speed
                 self.catcher.image = load_image('catcher_right.png')
                 self.current_direction = 'right'

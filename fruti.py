@@ -1,7 +1,6 @@
 import pygame
 from design import load_image
 import random
-from win32api import GetSystemMetrics
 
 
 class Fruits(pygame.sprite.Sprite):
@@ -21,14 +20,14 @@ class Fruits(pygame.sprite.Sprite):
             self.image = Fruits.image
             self.tolchok = False
         self.rect = self.image.get_rect()
-        self.rect.x = random.randrange(0, 800)
+        self.rect.x = random.randrange(200, 900)
         self.rect.y = 0
         self.coordsx_of_fallen = 0
         self.catcher = player
         self.player_in_game = player_in_game
         self.count = 5
         self.on_player = False
-        self.on_korzina = False
+        self.on_korzina = None
         self.count_korzina = 0
         self.za_player = False
         self.ticks = pygame.time.get_ticks()
@@ -36,10 +35,15 @@ class Fruits(pygame.sprite.Sprite):
 
     def update(self):
         if not pygame.sprite.collide_rect(self, self.catcher):
-            self.rect.y += 27
+            self.rect.y += 24
+            if self.rect.y >= 1080 - 185:
+                if not self.za_player:
+                    nepopal = pygame.mixer.Sound('resourses/music/combobreak.mp3')
+                    nepopal.set_volume(0.07)
+                    nepopal.play()
+                    self.za_player = True
         else:
-            if self.rect.y <= GetSystemMetrics(1) - 193:
-                self.rect.x, self.rect.y = self.catcher.rect.x + 20, self.catcher.rect.y - 60
+            if self.rect.y <= 1080 - 185:
                 if not self.on_player:
                     popal = pygame.mixer.Sound(f'resourses/music/{random.randrange(0, 4)}.wav')
                     popal.set_volume(0.04)
@@ -48,25 +52,12 @@ class Fruits(pygame.sprite.Sprite):
                     self.on_korzina = True
                     self.count_korzina += 1
                     if self.forsag:
-                        self.image = Fruits.image2
                         self.catcher.speed = 5
-                        if pygame.time.get_ticks() - self.ticks > 1500:
+                        if pygame.time.get_ticks() - self.ticks > 2000:
                             self.catcher.speed = 2.5
                             self.forsag = False
-                        if self.tolchok:
-                            if self.player_in_game.get_direction() == 'right':
-                                if self.catcher.rect.x + 50 > GetSystemMetrics(0):
-                                    self.catcher.rect.x += GetSystemMetrics(0) - self.catcher.rect.x
-                                else:
-                                    self.catcher.rect.x += 50
-                            elif self.player_in_game.get_direction() == 'left':
-                                if self.catcher.rect.x - 50 < GetSystemMetrics(0):
-                                    self.catcher.rect.x -= self.catcher.rect.x
-                                else:
-                                    self.catcher.rect.x -= 50
-                            self.tolchok = False
             else:
-                self.rect.y += 30
+                self.rect.y += 24
                 if not self.za_player:
                     nepopal = pygame.mixer.Sound('resourses/music/combobreak.mp3')
                     nepopal.set_volume(0.07)
@@ -78,6 +69,7 @@ class Fruits(pygame.sprite.Sprite):
 
     def get_y(self):
         return self.rect.y
+
 
 class Banana(pygame.sprite.Sprite):
     image = load_image('silent.png')
@@ -93,14 +85,14 @@ class Banana(pygame.sprite.Sprite):
         self.catcher = player
         self.count = 5
         self.on_player = False
-        self.on_korzina = False
+        self.on_korzina = None
         self.count_korzina = 0
 
     def update(self):
         if not pygame.sprite.collide_rect(self, self.catcher):
             self.rect.y += 30
         else:
-            if self.rect.y <= GetSystemMetrics(1) - 193:
+            if self.rect.y <= 1080 - 193:
                 self.rect.x, self.rect.y = self.catcher.rect.x + 20, self.catcher.rect.y - 60
                 if not self.on_player:
                     popal = pygame.mixer.Sound('resourses/music/spinnerbonus.wav')
