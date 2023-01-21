@@ -1,5 +1,4 @@
 import random
-import numba
 import pygame
 import librosa
 from record_database import *
@@ -115,8 +114,8 @@ if __name__ == '__main__':
 
         def changeValue(self) -> None:
             mousePos = pygame.mouse.get_pos()
-            if pointInRectanlge(mousePos[0], mousePos[1]
-                    , self.outlineSize[0], self.outlineSize[1], self.position[0], self.position[1]):
+            if pointInRectanlge(mousePos[0], mousePos[1],
+                                self.outlineSize[0], self.outlineSize[1], self.position[0], self.position[1]):
                 if pygame.mouse.get_pressed()[0]:
                     self.sliderWidth = mousePos[0] - self.position[0]
 
@@ -165,7 +164,6 @@ if __name__ == '__main__':
             self.current_value = value
             self.screen = screen
             self.rect_but = pygame.Rect((self.x, self.y), self.size)
-            self.l = radiobuttonsGroup
             radiobuttonsGroup.append(self)
 
         def render(self, on=True):
@@ -706,7 +704,7 @@ if __name__ == '__main__':
         screen.blit(render, (1920 - 20, 1080 - 30))
 
 
-    def snow(screen, snow_list, alpha=None):
+    def snow(screen, snow_list):
         speed = 10
         for snowy in snow_list:
             snowy[1] += speed
@@ -830,6 +828,7 @@ if __name__ == '__main__':
             pygame.display.flip()
         endless.stop()
 
+
     clicked = False
     count = 0
 
@@ -899,7 +898,7 @@ if __name__ == '__main__':
         print(consts.current_audio)
         pygame.mixer.music.load(consts.current_audio)
         pygame.mixer.music.play()
-        pygame.mixer.music.set_volume(0.0)
+        pygame.mixer.music.set_volume(0.1)
         delt = 0.07
         print(len(copied_notes))
         start_ticks = 0
@@ -916,7 +915,7 @@ if __name__ == '__main__':
                 if res == 'exit':
                     running = False
             keys = pygame.key.get_pressed()
-            """if consts.fallen >= consts.max_fall:
+            if consts.fallen >= consts.max_fall:
                 lox = True
                 pygame.mouse.set_visible(True)
                 pygame.mixer.music.pause()
@@ -930,7 +929,7 @@ if __name__ == '__main__':
                     running = False
                     pygame.mouse.set_visible(False)
                     all_sprites.empty()
-                    return gameloop(clicked=True)"""
+                    return gameloop(clicked=True)
             if keys[pygame.K_SPACE] and pygame.time.get_ticks() - start_ticks > 250:
                 start_ticks = pygame.time.get_ticks()
                 paused = True

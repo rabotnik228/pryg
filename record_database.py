@@ -35,19 +35,3 @@ class CreateMpDb:
     def get_song_name(self, audio):
         current_song = self.database.execute(f"""SELECT map_name FROM tablo WHERE song="{audio}";""")
         return current_song.fetchall()
-
-
-class AchivementDb:
-    def __init__(self):
-        self.database = sqlite3.connect(r'C:\pryg\users_achivements.db')
-        self.database.execute("""create table if not exists tablo (id INTEGER PRIMARY KEY, achiv_name TEXT UNIQUE, 
-                yes_or_not BOOL NOT NULL);""")
-        self.list_of_achiv = ("Catch -1 fruit", "Catch 100000", "Catch 2000000", "Catch 100000 in inverted",
-                              "Catch 2000000 in inverted", "Catch 100000 in flashlight",
-                              "Catch 2000000 in flashlight")
-
-    def set_complete(self, idi):
-        pass
-
-    def tutorial_check(self):
-        pass
